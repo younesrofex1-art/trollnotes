@@ -45,8 +45,16 @@ namespace expo {`;
       '};'
     );
 
+    // 4. Remove invalid SWIFT_RETURNS_RETAINED from constructors (rejected in Swift 6.2+)
+    content = content.replace(/SWIFT_RETURNS_RETAINED\s+RuntimeScheduler/g, 'RuntimeScheduler');
+
     fs.writeFileSync(targetHeader, content, 'utf8');
     console.log('[patch] Successfully patched RuntimeScheduler.h');
+  } else if (content.includes('SWIFT_RETURNS_RETAINED RuntimeScheduler')) {
+    console.log('[patch] Stripping SWIFT_RETURNS_RETAINED from RuntimeScheduler constructors...');
+    content = content.replace(/SWIFT_RETURNS_RETAINED\s+RuntimeScheduler/g, 'RuntimeScheduler');
+    fs.writeFileSync(targetHeader, content, 'utf8');
+    console.log('[patch] Successfully updated RuntimeScheduler.h constructors');
   } else {
     console.log('[patch] RuntimeScheduler.h is already patched or up-to-date.');
   }
