@@ -21,21 +21,28 @@ cd ios
 pod install
 cd ..
 
-echo "3. Building Xcode Archive (Unsigned)..."
+echo "3. Building iOS App (Unsigned)..."
 rm -rf build Payload TrollNotes.ipa
-xcodebuild archive \
+xcodebuild build \
   -workspace ios/TrollNotes.xcworkspace \
   -scheme TrollNotes \
   -configuration Release \
   -destination 'generic/platform=iOS' \
-  -archivePath build/TrollNotes.xcarchive \
+  -derivedDataPath build \
   CODE_SIGNING_ALLOWED=NO \
   CODE_SIGNING_REQUIRED=NO \
-  CODE_SIGN_IDENTITY=""
+  CODE_SIGN_IDENTITY="" \
+  CODE_SIGN_ENTITLEMENTS=""
 
 echo "4. Packaging Payload into TrollNotes.ipa..."
 mkdir -p Payload
-cp -r build/TrollNotes.xcarchive/Products/Applications/TrollNotes.app Payload/
+APP_PATH=$(find build -name "TrollNotes.app" -type d | head -n 1)
+if [ -z "$APP_PATH" ]; then
+  echo "❌ Error: TrollNotes.app not found in build directory"
+  exit 1
+fi
+echo "Found app bundle at: $APP_PATH"
+cp -r "$APP_PATH" Payload/
 zip -r -9 TrollNotes.ipa Payload
 rm -rf Payload
 

@@ -1,4 +1,5 @@
-internal import Expo
+import UIKit
+import Expo
 import React
 import ReactAppDependencyProvider
 
