@@ -3,5 +3,5 @@
   "EX_DEV_CLIENT_NETWORK_INSPECTOR": "true",
   "expo.inlineModules.watchedDirectories": "[]",
   "expo.inlineModules.xcodeProjectTargets": "{\"mainTarget\":\"TrollNotes\",\"targets\":[]}",
-  "ios.deploymentTarget": "15.0"
+  "ios.deploymentTarget": "16.4"
 }

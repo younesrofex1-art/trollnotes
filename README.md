@@ -22,9 +22,9 @@ A sleek, native iOS 15 Notes application built with **React Native** and **Expo*
 | :--- | :--- |
 | **App Name** | TrollNotes |
 | **Bundle ID** | `com.trollstore.trollnotes` |
-| **Target OS** | **iOS 15.0+** (`IPHONEOS_DEPLOYMENT_TARGET = 15.0`) |
+| **Target OS** | **iOS 16.4+** (`IPHONEOS_DEPLOYMENT_TARGET = 16.4`) |
 | **Framework** | Expo SDK 57 / React Native 0.86 (Hermes Engine) |
-| **Installation** | TrollStore 1.x / 2.x (CoreTrust permanent install) |
+| **Installation** | TrollStore 2.x (CoreTrust permanent install on iOS 16.4 - 16.6.1 / 17.0) |
 
 ---
 
@@ -108,7 +108,7 @@ trollnotes/
 │   └── build-ipa.yml            # Automated GitHub Actions workflow to build .ipa
 ├── assets/                      # Icons and splash screen
 ├── ios/
-│   ├── TrollNotes.xcodeproj     # Xcode project (Deployment Target: iOS 15.0)
+│   ├── TrollNotes.xcodeproj     # Xcode project (Deployment Target: iOS 16.4)
 │   ├── Podfile                  # CocoaPods specification for iOS 15
 │   └── TrollNotes/
 │       ├── Info.plist           # iOS bundle metadata & permissions
