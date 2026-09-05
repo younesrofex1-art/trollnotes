@@ -54,8 +54,14 @@ jobs:
       - name: Report Build Errors
         if: failure()
         run: |
-          echo "::error title=XcodeBuild Failure::Showing compiler errors:"
-          grep -i -C 2 -E "error:" xcodebuild.log | head -n 60 || tail -n 50 xcodebuild.log
+          echo "### ❌ XcodeBuild Failure Summary" >> $GITHUB_STEP_SUMMARY
+          echo '```' >> $GITHUB_STEP_SUMMARY
+          (grep -i -C 2 -E "error:|fatal error:" xcodebuild.log | head -n 60) >> $GITHUB_STEP_SUMMARY || true
+          echo '```' >> $GITHUB_STEP_SUMMARY
+          echo "### 📄 Tail of Build Log" >> $GITHUB_STEP_SUMMARY
+          echo '```' >> $GITHUB_STEP_SUMMARY
+          tail -n 80 xcodebuild.log >> $GITHUB_STEP_SUMMARY
+          echo '```' >> $GITHUB_STEP_SUMMARY
 
       - name: Upload Build Log
         if: failure()
