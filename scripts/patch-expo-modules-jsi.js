@@ -1,78 +1,87 @@
-const fs = require("fs");
-const path = require("path");
+const fs = require('fs');
+const path = require('path');
 
 // 1. Patch RuntimeScheduler.h (C++ interop ordering and constructor annotations for Swift 6.2+)
 const targetHeader = path.join(
   __dirname,
-  "..",
-  "node_modules",
-  "expo-modules-jsi",
-  "apple",
-  "Sources",
-  "ExpoModulesJSI-Cxx",
-  "include",
-  "RuntimeScheduler.h"
+  '..',
+  'node_modules',
+  'expo-modules-jsi',
+  'apple',
+  'Sources',
+  'ExpoModulesJSI-Cxx',
+  'include',
+  'RuntimeScheduler.h'
 );
 
 if (fs.existsSync(targetHeader)) {
-  let content = fs.readFileSync(targetHeader, "utf8");
+  let content = fs.readFileSync(targetHeader, 'utf8');
 
-  // Check if we need to patch constructor SWIFT_RETURNS_RETAINED
-  if (content.includes("SWIFT_RETURNS_RETAINED RuntimeScheduler(")) {
-    console.log("[patch] Removing SWIFT_RETURNS_RETAINED from RuntimeScheduler constructors...");
-    content = content.replace(
-      /SWIFT_RETURNS_RETAINED\s+RuntimeScheduler\(/g,
-      "RuntimeScheduler("
-    );
-  }
+  // Check if SWIFT_SHARED_REFERENCE is at the end of class definition
+  if (content.includes('} SWIFT_SHARED_REFERENCE(retainRuntimeScheduler, releaseRuntimeScheduler);')) {
+    console.log('[patch] Patching RuntimeScheduler.h for Swift C++ interop...');
 
-  // Check if we need to fix the ordering of SWIFT_SHARED_REFERENCE
-  if (content.includes("SWIFT_SHARED_REFERENCE(retainRuntimeScheduler, releaseRuntimeScheduler);") &&
-      !content.includes("// Forward declarations for Swift shared reference functions")) {
-    console.log("[patch] Patching RuntimeScheduler.h SWIFT_SHARED_REFERENCE ordering...");
-
-    content = content.replace(
-      "SWIFT_SHARED_REFERENCE(retainRuntimeScheduler, releaseRuntimeScheduler);",
-      "// SWIFT_SHARED_REFERENCE moved before class definition"
-    );
-
-    const insertionPoint = "namespace expo {";
-    const forwardDecls = `// Forward declarations for Swift shared reference functions
+    // 1. Add forward declarations before namespace expo definition
+    const forwardDecls = `
 namespace expo {
 class RuntimeScheduler;
-void retainRuntimeScheduler(RuntimeScheduler* scheduler);
-void releaseRuntimeScheduler(RuntimeScheduler* scheduler);
 }
 
-SWIFT_SHARED_REFERENCE(expo::retainRuntimeScheduler, expo::releaseRuntimeScheduler)
+void retainRuntimeScheduler(expo::RuntimeScheduler *scheduler);
+void releaseRuntimeScheduler(expo::RuntimeScheduler *scheduler);
 
 namespace expo {`;
 
-    content = content.replace(insertionPoint, forwardDecls);
-  }
+    content = content.replace('namespace expo {', forwardDecls);
 
-  fs.writeFileSync(targetHeader, content, "utf8");
-  console.log("[patch] RuntimeScheduler.h patch complete.");
+    // 2. Add SWIFT_SHARED_REFERENCE attribute directly onto the class declaration
+    content = content.replace(
+      'class RuntimeScheduler {',
+      'class SWIFT_SHARED_REFERENCE(retainRuntimeScheduler, releaseRuntimeScheduler) RuntimeScheduler {'
+    );
+
+    // 3. Remove SWIFT_SHARED_REFERENCE attribute from the closing brace
+    content = content.replace(
+      '} SWIFT_SHARED_REFERENCE(retainRuntimeScheduler, releaseRuntimeScheduler);',
+      '};'
+    );
+
+    // 4. Remove invalid SWIFT_RETURNS_RETAINED from constructors (rejected in Swift 6.2+)
+    content = content.replace(/SWIFT_RETURNS_RETAINED\s+RuntimeScheduler/g, 'RuntimeScheduler');
+
+    fs.writeFileSync(targetHeader, content, 'utf8');
+    console.log('[patch] Successfully patched RuntimeScheduler.h');
+  } else if (content.includes('SWIFT_RETURNS_RETAINED RuntimeScheduler')) {
+    console.log('[patch] Stripping SWIFT_RETURNS_RETAINED from RuntimeScheduler constructors...');
+    content = content.replace(/SWIFT_RETURNS_RETAINED\s+RuntimeScheduler/g, 'RuntimeScheduler');
+    fs.writeFileSync(targetHeader, content, 'utf8');
+    console.log('[patch] Successfully updated RuntimeScheduler.h constructors');
+  } else {
+    console.log('[patch] RuntimeScheduler.h is already patched or up-to-date.');
+  }
 } else {
-  console.log("[patch] RuntimeScheduler.h not found, skipping.");
+  console.log('[patch] RuntimeScheduler.h not found, skipping patch.');
 }
 
 // 2. Patch Package.swift (disable upcoming feature NonisolatedNonsendingByDefault in Swift 6 mode)
 const packageSwiftPath = path.join(
   __dirname,
-  "..",
-  "node_modules",
-  "expo-modules-jsi",
-  "apple",
-  "Package.swift"
+  '..',
+  'node_modules',
+  'expo-modules-jsi',
+  'apple',
+  'Package.swift'
 );
 
 if (fs.existsSync(packageSwiftPath)) {
-  let content = fs.readFileSync(packageSwiftPath, "utf8");
+  let content = fs.readFileSync(packageSwiftPath, 'utf8');
   let changed = false;
 
-  if (content.includes('.enableUpcomingFeature("NonisolatedNonsendingByDefault"),') && !content.includes('// .enableUpcomingFeature("NonisolatedNonsendingByDefault"),')) {
-    console.log("[patch] Disabling NonisolatedNonsendingByDefault in Package.swift...");
+  if (
+    content.includes('.enableUpcomingFeature("NonisolatedNonsendingByDefault"),') &&
+    !content.includes('// .enableUpcomingFeature("NonisolatedNonsendingByDefault"),')
+  ) {
+    console.log('[patch] Disabling NonisolatedNonsendingByDefault in Package.swift...');
     content = content.replace(
       '.enableUpcomingFeature("NonisolatedNonsendingByDefault"),',
       '// .enableUpcomingFeature("NonisolatedNonsendingByDefault"),'
@@ -81,43 +90,43 @@ if (fs.existsSync(packageSwiftPath)) {
   }
 
   // Ensure Swift 6 mode is preserved
-  if (content.includes("swiftLanguageModes: [.v5],")) {
-    console.log("[patch] Ensuring swiftLanguageModes: [.v6]...");
+  if (content.includes('swiftLanguageModes: [.v5],')) {
+    console.log('[patch] Ensuring swiftLanguageModes: [.v6]...');
     content = content.replace(
-      "swiftLanguageModes: [.v5],",
-      "swiftLanguageModes: [.v6],"
+      'swiftLanguageModes: [.v5],',
+      'swiftLanguageModes: [.v6],'
     );
     changed = true;
   }
 
   if (content.includes('"-strict-concurrency=minimal",\n          ')) {
-    content = content.replace('"-strict-concurrency=minimal",\n          ', "");
+    content = content.replace('"-strict-concurrency=minimal",\n          ', '');
     changed = true;
   }
 
   if (changed) {
-    fs.writeFileSync(packageSwiftPath, content, "utf8");
-    console.log("[patch] Successfully patched Package.swift");
+    fs.writeFileSync(packageSwiftPath, content, 'utf8');
+    console.log('[patch] Successfully patched Package.swift');
   } else {
-    console.log("[patch] Package.swift is already up-to-date.");
+    console.log('[patch] Package.swift is already up-to-date.');
   }
 }
 
 // 3. Patch JavaScriptRuntime.swift (passing non-Sendable raw pointers across actor boundary)
 const jsRuntimePath = path.join(
   __dirname,
-  "..",
-  "node_modules",
-  "expo-modules-jsi",
-  "apple",
-  "Sources",
-  "ExpoModulesJSI",
-  "Runtime",
-  "JavaScriptRuntime.swift"
+  '..',
+  'node_modules',
+  'expo-modules-jsi',
+  'apple',
+  'Sources',
+  'ExpoModulesJSI',
+  'Runtime',
+  'JavaScriptRuntime.swift'
 );
 
 if (fs.existsSync(jsRuntimePath)) {
-  let content = fs.readFileSync(jsRuntimePath, "utf8");
+  let content = fs.readFileSync(jsRuntimePath, 'utf8');
 
   // Block 1: SyncFunctionClosure (HostFunctionContext)
   const oldBlock1 = `    nonisolated(unsafe) let thisPtr = thisPtr
@@ -193,23 +202,23 @@ if (fs.existsSync(jsRuntimePath)) {
 
   let patched = false;
   if (content.includes(oldBlock1)) {
-    console.log("[patch] Patching JavaScriptRuntime.swift Block 1 (HostFunctionContext)...");
+    console.log('[patch] Patching JavaScriptRuntime.swift Block 1 (HostFunctionContext)...');
     content = content.replace(oldBlock1, newBlock1);
     patched = true;
   }
 
   if (content.includes(oldBlock2)) {
-    console.log("[patch] Patching JavaScriptRuntime.swift Block 2 (UnownedThisHostFunctionContext)...");
+    console.log('[patch] Patching JavaScriptRuntime.swift Block 2 (UnownedThisHostFunctionContext)...');
     content = content.replace(oldBlock2, newBlock2);
     patched = true;
   }
 
   if (patched) {
-    fs.writeFileSync(jsRuntimePath, content, "utf8");
-    console.log("[patch] Successfully patched JavaScriptRuntime.swift");
-  } else if (content.includes("let innerThisPtr = UnsafeMutablePointer<facebook.jsi.Value>(bitPattern: thisPtrAddress)!")) {
-    console.log("[patch] JavaScriptRuntime.swift is already up-to-date.");
+    fs.writeFileSync(jsRuntimePath, content, 'utf8');
+    console.log('[patch] Successfully patched JavaScriptRuntime.swift');
+  } else if (content.includes('let innerThisPtr = UnsafeMutablePointer<facebook.jsi.Value>(bitPattern: thisPtrAddress)!')) {
+    console.log('[patch] JavaScriptRuntime.swift is already up-to-date.');
   } else {
-    console.warn("[patch] Warning: Could not find target patterns in JavaScriptRuntime.swift");
+    console.warn('[patch] Warning: Could not find target patterns in JavaScriptRuntime.swift');
   }
 }
