@@ -48,6 +48,7 @@ jobs:
 
       - name: Ensure Swift tools compatibility for expo-modules-jsi
         run: |
+          node scripts/patch-expo-modules-jsi.js
           SWIFT_VER=$(swift -version 2>/dev/null | grep -oE "Swift version [0-9]+\.[0-9]+" | awk '{print $3}' || echo "6.2")
           echo "Active Swift version: $SWIFT_VER"
           if [[ "$SWIFT_VER" == "6.0"* || "$SWIFT_VER" == "6.1"* ]]; then
