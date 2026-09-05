@@ -14,14 +14,28 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Select Xcode 16
+      - name: Select Xcode (Swift 6.2+ for Expo SDK 57)
         run: |
-          if [ -d "/Applications/Xcode_16.2.app" ]; then
-            sudo xcode-select -switch /Applications/Xcode_16.2.app
-          elif [ -d "/Applications/Xcode_16.1.app" ]; then
-            sudo xcode-select -switch /Applications/Xcode_16.1.app
-          fi
+          # Expo SDK 57 (expo-modules-jsi) requires Swift tools version >= 6.2
+          # Select Xcode 26.x which provides Swift 6.2+ on macos-15 runner
+          for xcode_path in \
+            "/Applications/Xcode_26.3.app" \
+            "/Applications/Xcode_26.2.app" \
+            "/Applications/Xcode_26.1.1.app" \
+            "/Applications/Xcode_26.0.1.app" \
+            "/Applications/Xcode_26.app" \
+            "/Applications/Xcode_16.4.app" \
+            "/Applications/Xcode_16.3.app"; do
+            if [ -d "$xcode_path" ]; then
+              echo "Selecting $xcode_path"
+              sudo xcode-select -switch "$xcode_path"
+              echo "DEVELOPER_DIR=$xcode_path/Contents/Developer" >> $GITHUB_ENV
+              export DEVELOPER_DIR="$xcode_path/Contents/Developer"
+              break
+            fi
+          done
           xcodebuild -version
+          swift --version
 
       - name: Setup Node.js
         uses: actions/setup-node@v4
@@ -31,6 +45,16 @@ jobs:
 
       - name: Install dependencies
         run: npm ci || npm install
+
+      - name: Ensure Swift tools compatibility for expo-modules-jsi
+        run: |
+          SWIFT_VER=$(swift -version 2>/dev/null | grep -oE "Swift version [0-9]+\.[0-9]+" | awk '{print $3}' || echo "6.2")
+          echo "Active Swift version: $SWIFT_VER"
+          if [[ "$SWIFT_VER" == "6.0"* || "$SWIFT_VER" == "6.1"* ]]; then
+            echo "Adapting Package.swift for Swift $SWIFT_VER..."
+            sed -i '' 's/swift-tools-version: 6.2/swift-tools-version: 6.0/g' node_modules/expo-modules-jsi/apple/Package.swift 2>/dev/null || \
+            sed -i 's/swift-tools-version: 6.2/swift-tools-version: 6.0/g' node_modules/expo-modules-jsi/apple/Package.swift || true
+          fi
 
       - name: Install CocoaPods
         run: |
@@ -62,6 +86,9 @@ jobs:
           echo '```' >> $GITHUB_STEP_SUMMARY
           tail -n 80 xcodebuild.log >> $GITHUB_STEP_SUMMARY
           echo '```' >> $GITHUB_STEP_SUMMARY
+          echo "::error title=XcodeBuild Failure::$(grep -m 1 -i 'error:' xcodebuild.log || echo 'Xcode build failed')"
+          echo "=== EXCERPT OF ERRORS FROM xcodebuild.log ==="
+          grep -i -C 3 -E "error:|fatal error:" xcodebuild.log | head -n 80 || true
 
       - name: Upload Build Log
         if: failure()
