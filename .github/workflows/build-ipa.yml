@@ -39,6 +39,7 @@ jobs:
 
       - name: Build App (Unsigned for TrollStore)
         run: |
+          set -o pipefail
           xcodebuild build \
             -workspace ios/TrollNotes.xcworkspace \
             -scheme TrollNotes \
@@ -48,7 +49,21 @@ jobs:
             CODE_SIGNING_ALLOWED=NO \
             CODE_SIGNING_REQUIRED=NO \
             CODE_SIGN_IDENTITY="" \
-            CODE_SIGN_ENTITLEMENTS=""
+            CODE_SIGN_ENTITLEMENTS="" 2>&1 | tee xcodebuild.log
+
+      - name: Report Build Errors
+        if: failure()
+        run: |
+          echo "::error title=XcodeBuild Failure::Showing compiler errors:"
+          grep -i -C 2 -E "error:" xcodebuild.log | head -n 60 || tail -n 50 xcodebuild.log
+
+      - name: Upload Build Log
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: xcodebuild-failure-log
+          path: xcodebuild.log
+          retention-days: 7
 
       - name: Package Payload and Create IPA
         run: |
