@@ -1,6 +1,7 @@
 const fs = require('fs');
 const path = require('path');
 
+// 1. Patch RuntimeScheduler.h (C++ interop ordering and constructor annotations)
 const targetHeader = path.join(
   __dirname,
   '..',
@@ -58,6 +59,61 @@ namespace expo {`;
   } else {
     console.log('[patch] RuntimeScheduler.h is already patched or up-to-date.');
   }
-} else {
-  console.log('[patch] expo-modules-jsi not found, skipping patch.');
+}
+
+// 2. Patch JavaScriptRuntime.swift (sending thisPtr across boundary in Swift 6.3)
+const jsRuntimePath = path.join(
+  __dirname,
+  '..',
+  'node_modules',
+  'expo-modules-jsi',
+  'apple',
+  'Sources',
+  'ExpoModulesJSI',
+  'Runtime',
+  'JavaScriptRuntime.swift'
+);
+
+if (fs.existsSync(jsRuntimePath)) {
+  let content = fs.readFileSync(jsRuntimePath, 'utf8');
+  if (content.includes('let this = UnsafeMutablePointer(mutating: thisPtr).move()')) {
+    console.log('[patch] Patching JavaScriptRuntime.swift thisPtr capture...');
+    content = content.replace(
+      'nonisolated(unsafe) let thisPtr = thisPtr',
+      'let thisPtrAddress = UInt(bitPattern: thisPtr)'
+    );
+    content = content.replace(
+      'let this = UnsafeMutablePointer(mutating: thisPtr).move()',
+      'let this = UnsafeMutablePointer<facebook.jsi.Value>(bitPattern: thisPtrAddress)!.move()'
+    );
+    fs.writeFileSync(jsRuntimePath, content, 'utf8');
+    console.log('[patch] Successfully patched JavaScriptRuntime.swift');
+  } else {
+    console.log('[patch] JavaScriptRuntime.swift is already patched or up-to-date.');
+  }
+}
+
+// 3. Patch Package.swift (disable upcoming feature NonisolatedNonsendingByDefault)
+const packageSwiftPath = path.join(
+  __dirname,
+  '..',
+  'node_modules',
+  'expo-modules-jsi',
+  'apple',
+  'Package.swift'
+);
+
+if (fs.existsSync(packageSwiftPath)) {
+  let content = fs.readFileSync(packageSwiftPath, 'utf8');
+  if (content.includes('.enableUpcomingFeature("NonisolatedNonsendingByDefault"),')) {
+    console.log('[patch] Disabling NonisolatedNonsendingByDefault in Package.swift...');
+    content = content.replace(
+      '.enableUpcomingFeature("NonisolatedNonsendingByDefault"),',
+      '// .enableUpcomingFeature("NonisolatedNonsendingByDefault"),'
+    );
+    fs.writeFileSync(packageSwiftPath, content, 'utf8');
+    console.log('[patch] Successfully patched Package.swift');
+  } else {
+    console.log('[patch] Package.swift is already patched or up-to-date.');
+  }
 }
